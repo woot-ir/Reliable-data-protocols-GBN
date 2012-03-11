@@ -1,12 +1,12 @@
 /* 
  * File:   main.c
- * Author: abhishek-srinath
+ * Author: Abhishek-Srinath
  *
  * Created on March 11, 2012, 12:33 AM
  */
 
 
-#include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 
 /* ******************************************************************
@@ -32,7 +32,7 @@
 struct msg {
   char data[20];
   };
-
+  
 /* a packet is the data unit passed from layer 4 (students code) to layer */
 /* 3 (teachers code).  Note the pre-defined packet structure, which all   */
 /* students must follow. */
@@ -45,14 +45,69 @@ struct pkt {
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
+int in_cksum(char *addr, int len)
+{
+    int nleft = len;
+    char *w = addr;
+    int answer;
+    int sum = 0;
+    /*
+     *  My algorithm is simple, using a 32 bit accumulator (sum),
+     *  we add sequential 16 bit words to it, and at the end, fold
+     *  back all the carry bits from the top 16 bits into the lower
+     *  16 bits.
+     */
+    while (nleft > 1)  {
+        sum += *w++;
+        //printf("char:-%c\tvalue:-%d\n",*w,sum);
+        nleft -= 2;
+    }
 
+    /* mop up an odd byte, if necessary */
+    if (nleft == 1)
+        sum += *(char *)w;
 
+    /*
+     * add back carry outs from top 16 bits to low 16 bits
+     */
+    sum = (sum >> 16) + (sum & 0xffff); /* add hi 16 to low 16 */
+    sum += (sum >> 16);         /* add carry */
+    answer = ~sum;              /* truncate to 16 bits */
+    return (answer);
+}
+
+    //struct msg messageData[20];
+    struct pkt sendingPacket[2000];
+    int base=1;
+    int nextSeqNum=1;
+    int windowSize=10;
 
 /* called from layer 5, passed the data to be sent to other side */
 A_output(message)
   struct msg message;
 {
+    int sendingChkSum=0;
+    int i;
+    if(nextSeqNum < base + windowSize)
+    {
+        for (i=0; i<20; i++)
+                sendingPacket[nextSeqNum].payload[i] = message.data[i];
 
+        sendingPacket[nextSeqNum].seqnum=nextSeqNum;
+        sendingChkSum=in_cksum(message.data,20);
+        sendingPacket[nextSeqNum].checksum=sendingChkSum + nextSeqNum;
+        tolayer3(0,sendingPacket[nextSeqNum]);
+        if(nextSeqNum == base)
+        {
+            starttimer(0,50.0);
+        }
+        nextSeqNum++;
+    }
+    else
+    {
+        printf("\nrefuse data not enough space\n");
+       // exit(0);
+    }
 }
 
 B_output(message)  /* need be completed only for extra credit */
@@ -65,13 +120,33 @@ B_output(message)  /* need be completed only for extra credit */
 A_input(packet)
   struct pkt packet;
 {
-
+    int tempAckCheckSum=0;
+    tempAckCheckSum = packet.acknum + 5;
+    if(tempAckCheckSum == packet.checksum)
+    {
+        printf("Received ack which is not corrupted ");
+        base = packet.acknum + 1;
+        if(base == nextSeqNum)
+        {
+            printf("Stopping timer for pkt no %d",base - 1);
+            stoptimer(0);
+        }
+        else
+        {
+            starttimer(0,50.0);
+        }
+    }
 }
 
 /* called when A's timer goes off */
 A_timerinterrupt()
 {
-
+    int i;
+    starttimer(0,50.0);
+    for(i = base;i <= nextSeqNum -1;i++)
+    {
+        tolayer3(0,sendingPacket[i]);
+    }
 }  
 
 /* the following routine will be called once (only) before any other */
@@ -82,11 +157,32 @@ A_init()
 
 
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
-
+int expectedSeqNum = 1;
+struct pkt ackPacket;
 /* called from layer 3, when a packet arrives for layer 4 at B*/
 B_input(packet)
   struct pkt packet;
 {
+    int receivingPacketChkSum=0;
+    int ackCheckSum=0;
+    receivingPacketChkSum = in_cksum(packet.payload,20);
+    receivingPacketChkSum += expectedSeqNum;
+    if(receivingPacketChkSum == packet.checksum && expectedSeqNum == packet.seqnum)
+    {
+        printf("\nB_input:-Pkt not corrupted and received correct seq number %d\n",packet.seqnum);
+        tolayer5(1,packet.payload);
+        ackCheckSum = expectedSeqNum + 5;
+        ackPacket.acknum = expectedSeqNum;
+        ackPacket.checksum = ackCheckSum;
+        printf("\nB_input:-ack packet sent to layer 3");
+        tolayer3(1,ackPacket);
+        expectedSeqNum++;
+    }
+    else
+    {
+        printf("\nPacket is corrupted or received wrong seq number\n");
+        tolayer3(1,ackPacket);
+    }
 }
 
 /* called when B's timer goes off */
@@ -150,7 +246,7 @@ int   ntolayer3;           /* number sent into layer 3 */
 int   nlost;               /* number lost in media */
 int ncorrupt;              /* number corrupted by media*/
 
-main()
+int main()
 {
    struct event *eventptr;
    struct msg  msg2give;
@@ -231,6 +327,7 @@ terminate:
    /*****************************************************************************************/
    /* Add your results here!!! *********************/
    /*****************************************************************************************/
+return 0;
 }
 
 
@@ -263,7 +360,7 @@ init()                         /* initialize the simulator */
     printf("It is likely that random number generation on your machine\n" ); 
     printf("is different from what this emulator expects.  Please take\n");
     printf("a look at the routine jimsrand() in the emulator code. Sorry. \n");
-    exit();
+    exit(0);
     }
 
    ntolayer3 = 0;
