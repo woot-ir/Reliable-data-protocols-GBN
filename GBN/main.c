@@ -97,11 +97,15 @@ A_output(message)
         sendingChkSum=in_cksum(message.data,20);
         sendingPacket[nextSeqNum].checksum=sendingChkSum + nextSeqNum;
         tolayer3(0,sendingPacket[nextSeqNum]);
+        printf("\nA_output:-Sending packet with seq no %d to layer3\n",nextSeqNum);
         if(nextSeqNum == base)
         {
-            starttimer(0,50.0);
+            printf("Started timer for pkt %d",base);
+            starttimer(0,100.0);
         }
         nextSeqNum++;
+        printf("nextSeq number-> %d\nBase->%d",nextSeqNum,base);
+        
     }
     else
     {
@@ -124,16 +128,20 @@ A_input(packet)
     tempAckCheckSum = packet.acknum + 5;
     if(tempAckCheckSum == packet.checksum)
     {
-        printf("Received ack which is not corrupted ");
-        base = packet.acknum + 1;
+        printf("\nReceived ack %d which is not corrupted\n",packet.acknum);
+        if(base < packet.acknum + 1)
+        {
+                base = packet.acknum + 1;
+        }
+        printf("\nA_input:-base incremented to %d\n",base);
         if(base == nextSeqNum)
         {
-            printf("Stopping timer for pkt no %d",base - 1);
+            printf("\nStopping timer for pkt no %d\n",base - 1);
             stoptimer(0);
         }
         else
         {
-            starttimer(0,50.0);
+            starttimer(0,100.0);
         }
     }
 }
@@ -142,9 +150,10 @@ A_input(packet)
 A_timerinterrupt()
 {
     int i;
-    starttimer(0,50.0);
+    starttimer(0,100.0);
     for(i = base;i <= nextSeqNum -1;i++)
     {
+        printf("\nA_timerinterrupt:- sending packets %d\n",i);
         tolayer3(0,sendingPacket[i]);
     }
 }  
@@ -153,6 +162,7 @@ A_timerinterrupt()
 /* entity A routines are called. You can use it to do any initialization */
 A_init()
 {
+    printf("Initializing A\n");
 }
 
 
@@ -171,10 +181,11 @@ B_input(packet)
     {
         printf("\nB_input:-Pkt not corrupted and received correct seq number %d\n",packet.seqnum);
         tolayer5(1,packet.payload);
+        printf("\nDeliver data to layer5\n");
         ackCheckSum = expectedSeqNum + 5;
         ackPacket.acknum = expectedSeqNum;
         ackPacket.checksum = ackCheckSum;
-        printf("\nB_input:-ack packet sent to layer 3");
+        printf("\nB_input:-ack packet %d sent to layer 3\n",expectedSeqNum);
         tolayer3(1,ackPacket);
         expectedSeqNum++;
     }
