@@ -205,6 +205,7 @@ B_timerinterrupt()
 /* entity B routines are called. You can use it to do any initialization */
 B_init()
 {
+    printf("\nInitializing B_init\n");
 }
 
 
