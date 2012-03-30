@@ -8,6 +8,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <sys/time.h>
 
 /* ******************************************************************
  ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1  J.F.Kurose
@@ -81,13 +82,30 @@ int in_cksum(char *addr, int len)
     int base=1;
     int nextSeqNum=1;
     int windowSize=10;
+    
+    int A_toLayer4Count = 0;
+    int A_toLayer3Count = 0;
+    int B_tolayer5Count = 0;
+    int B_tolayer4Count = 0;
+    struct timeval tv;
+    double tStartUpload = 0.0;
+    double tEndUpload = 0.0;
+    struct timeval tim;
 
+    
+    
+    /* THIS IS GBN */
+    
+    
+    
+    
 /* called from layer 5, passed the data to be sent to other side */
 A_output(message)
   struct msg message;
 {
     int sendingChkSum=0;
     int i;
+    A_toLayer4Count++;
     if(nextSeqNum < base + windowSize)
     {
         for (i=0; i<20; i++)
@@ -97,11 +115,12 @@ A_output(message)
         sendingChkSum=in_cksum(message.data,20);
         sendingPacket[nextSeqNum].checksum=sendingChkSum + nextSeqNum;
         tolayer3(0,sendingPacket[nextSeqNum]);
+        A_toLayer3Count++;
         printf("\nA_output:-Sending packet with seq no %d to layer3\n",nextSeqNum);
         if(nextSeqNum == base)
         {
             printf("Started timer for pkt %d",base);
-            starttimer(0,100.0);
+            starttimer(0,15.0);
         }
         nextSeqNum++;
         printf("nextSeq number-> %d\nBase->%d",nextSeqNum,base);
@@ -141,7 +160,7 @@ A_input(packet)
         }
         else
         {
-            starttimer(0,100.0);
+            starttimer(0,15.0);
         }
     }
 }
@@ -150,11 +169,12 @@ A_input(packet)
 A_timerinterrupt()
 {
     int i;
-    starttimer(0,100.0);
+    starttimer(0,15.0);
     for(i = base;i <= nextSeqNum -1;i++)
     {
         printf("\nA_timerinterrupt:- sending packets %d\n",i);
         tolayer3(0,sendingPacket[i]);
+        A_toLayer3Count++;
     }
 }  
 
@@ -163,12 +183,18 @@ A_timerinterrupt()
 A_init()
 {
     printf("Initializing A\n");
+    tv.tv_sec=0;
+    tv.tv_usec=0;
+    /*Get the start time to calculate the Throughput*/
+    gettimeofday(&tim, NULL);  
+        tStartUpload=tim.tv_sec+(tim.tv_usec/1000000.0);
 }
 
 
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
 int expectedSeqNum = 1;
 struct pkt ackPacket;
+//int tolayer5Count=0;
 /* called from layer 3, when a packet arrives for layer 4 at B*/
 B_input(packet)
   struct pkt packet;
@@ -177,10 +203,12 @@ B_input(packet)
     int ackCheckSum=0;
     receivingPacketChkSum = in_cksum(packet.payload,20);
     receivingPacketChkSum += expectedSeqNum;
+    B_tolayer4Count++;
     if(receivingPacketChkSum == packet.checksum && expectedSeqNum == packet.seqnum)
     {
         printf("\nB_input:-Pkt not corrupted and received correct seq number %d\n",packet.seqnum);
         tolayer5(1,packet.payload);
+	B_tolayer5Count++;
         printf("\nDeliver data to layer5\n");
         ackCheckSum = expectedSeqNum + 5;
         ackPacket.acknum = expectedSeqNum;
@@ -336,7 +364,19 @@ int main()
 
 terminate:
    printf(" Simulator terminated at time %f\n after sending %d msgs from layer5\n",time,nsim);
-   /*****************************************************************************************/
+   gettimeofday(&tim, NULL);  
+        tEndUpload = tim.tv_sec+(tim.tv_usec/1000000.0);
+   //printf("Total count of packets received at layer 5 is %d",);
+   //printf("Total time taken =%0.6lf",);
+   printf("Protocol: [GBN]\n");
+   printf("%d of packets sent from the Application Layer of Sender A\n",A_toLayer4Count); 
+   printf("%d of packets sent from the Transport Layer of Sender A\n",A_toLayer3Count);
+   printf("%d packets received at the Transport layer of receiver B\n",B_tolayer4Count);
+   printf("%d of packets received at the Application layer of receiver B\n", B_tolayer5Count);
+   printf("Total time: %f time units\n",time);
+  // printf("Total time: %0.6lf seconds\n",(tEndUpload - tStartUpload));
+   printf("Throughput = %f packets/time units\n",(float)B_tolayer5Count/time);
+   /*******""**********************************************************************************/
    /* Add your results here!!! *********************/
    /*****************************************************************************************/
 return 0;
