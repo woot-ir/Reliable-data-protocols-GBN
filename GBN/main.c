@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/time.h>
+//#include <stdlib.h>
 
 /* ******************************************************************
  ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1  J.F.Kurose
@@ -46,6 +47,15 @@ struct pkt {
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
+    
+    /* THIS IS GBN */
+    /**
+     * This is the function ised to calculate the checksum . Takes in the 
+     * string and the length and returns the checksum
+     * @param addr
+     * @param len
+     * @return 
+     */
 int in_cksum(char *addr, int len)
 {
     int nleft = len;
@@ -91,21 +101,24 @@ int in_cksum(char *addr, int len)
     double tStartUpload = 0.0;
     double tEndUpload = 0.0;
     struct timeval tim;
-
-    
-    
-    /* THIS IS GBN */
     
     
     
     
-/* called from layer 5, passed the data to be sent to other side */
+    /**
+     * called from layer 5, passed the data to be sent to other side 
+     * @param message
+     * @return 
+     */
 A_output(message)
   struct msg message;
 {
     int sendingChkSum=0;
     int i;
-    A_toLayer4Count++;
+    A_toLayer4Count++;  // This takes the count of pkt sent to layer 4 from the application
+    
+    /*This checks whether the seq number is less than the base + window size if so then it 
+     will start processing */
     if(nextSeqNum < base + windowSize)
     {
         for (i=0; i<20; i++)
@@ -115,7 +128,7 @@ A_output(message)
         sendingChkSum=in_cksum(message.data,20);
         sendingPacket[nextSeqNum].checksum=sendingChkSum + nextSeqNum;
         tolayer3(0,sendingPacket[nextSeqNum]);
-        A_toLayer3Count++;
+        A_toLayer3Count++; // This takes the count of pkt sent to layer 3 from the layer 4
         printf("\nA_output:-Sending packet with seq no %d to layer3\n",nextSeqNum);
         if(nextSeqNum == base)
         {
@@ -139,20 +152,31 @@ B_output(message)  /* need be completed only for extra credit */
 
 }
 
-/* called from layer 3, when a packet arrives for layer 4 */
+
+  /**
+   * called from layer 3, when a packet arrives for layer 4 
+   * @param packet
+   * @return 
+   */
 A_input(packet)
   struct pkt packet;
 {
     int tempAckCheckSum=0;
     tempAckCheckSum = packet.acknum + 5;
+    //Check to see if the pkt sent from layer 3 is not corrupted
     if(tempAckCheckSum == packet.checksum)
     {
         printf("\nReceived ack %d which is not corrupted\n",packet.acknum);
+        //This is to make sure that the base is not updated to old value due to retransmissions
         if(base < packet.acknum + 1)
         {
                 base = packet.acknum + 1;
+                printf("\nA_input:-base incremented to %d\n",base);
         }
-        printf("\nA_input:-base incremented to %d\n",base);
+        /*
+         * When base == nextSeq number then the timer for the pkt is stopped else timer for the next pkt 
+        is started 
+         */ 
         if(base == nextSeqNum)
         {
             printf("\nStopping timer for pkt no %d\n",base - 1);
@@ -165,11 +189,18 @@ A_input(packet)
     }
 }
 
-/* called when A's timer goes off */
+  /**
+   * called when A's timer goes off 
+   * @return 
+   */
 A_timerinterrupt()
 {
     int i;
     starttimer(0,15.0);
+    /*
+     * Here all the packets from the base to next seq number is sent if the timer for the 
+     pkt with seq number goes off
+     */
     for(i = base;i <= nextSeqNum -1;i++)
     {
         printf("\nA_timerinterrupt:- sending packets %d\n",i);
@@ -194,8 +225,12 @@ A_init()
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
 int expectedSeqNum = 1;
 struct pkt ackPacket;
-//int tolayer5Count=0;
-/* called from layer 3, when a packet arrives for layer 4 at B*/
+
+/**
+ * called from layer 3, when a packet arrives for layer 4 at B
+ * @param packet
+ * @return 
+ */
 B_input(packet)
   struct pkt packet;
 {
@@ -204,23 +239,34 @@ B_input(packet)
     receivingPacketChkSum = in_cksum(packet.payload,20);
     receivingPacketChkSum += expectedSeqNum;
     B_tolayer4Count++;
-    if(receivingPacketChkSum == packet.checksum && expectedSeqNum == packet.seqnum)
+    //Checks for the check sum. Start processing only if the checksum is correct
+    if(receivingPacketChkSum == packet.checksum)
     {
-        printf("\nB_input:-Pkt not corrupted and received correct seq number %d\n",packet.seqnum);
-        tolayer5(1,packet.payload);
-	B_tolayer5Count++;
-        printf("\nDeliver data to layer5\n");
-        ackCheckSum = expectedSeqNum + 5;
-        ackPacket.acknum = expectedSeqNum;
-        ackPacket.checksum = ackCheckSum;
-        printf("\nB_input:-ack packet %d sent to layer 3\n",expectedSeqNum);
-        tolayer3(1,ackPacket);
-        expectedSeqNum++;
+        //If the seq number is expected then the pkt is extracted and delivered
+        //else a previous ack is sent
+        if(expectedSeqNum == packet.seqnum)
+        {
+                printf("\nB_input:-Pkt not corrupted and received correct seq number %d\n",packet.seqnum);
+                tolayer5(1,packet.payload);
+                B_tolayer5Count++;
+                printf("\nDeliver data to layer5\n");
+                ackCheckSum = expectedSeqNum + 5;
+                ackPacket.acknum = expectedSeqNum;
+                ackPacket.checksum = ackCheckSum;
+                printf("\nB_input:-ack packet %d sent to layer 3\n",expectedSeqNum);
+                tolayer3(1,ackPacket);
+                expectedSeqNum++;
+        }
+        else
+        {
+                printf("\nPacket is already received, has seq number %d so resending ack\n",packet.seqnum);
+                tolayer3(1,ackPacket);
+        }
     }
     else
     {
-        printf("\nPacket is corrupted or received wrong seq number\n");
-        tolayer3(1,ackPacket);
+                printf("\nPacket received %d is corrupted\n",packet.seqnum);
+                tolayer3(1,ackPacket);
     }
 }
 
@@ -229,7 +275,7 @@ B_timerinterrupt()
 {
 }
 
-/* the following rouytine will be called once (only) before any other */
+/* the following routine will be called once (only) before any other */
 /* entity B routines are called. You can use it to do any initialization */
 B_init()
 {
